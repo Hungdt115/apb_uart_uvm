@@ -1,0 +1,6 @@
+../src/apb_dut.sv
+../src/apb_dut_wrapper.sv
+../src/apb_mem.sv
+../src/apb_slave.v
+../src/apb2reg.v
+../src/rw_reg.v

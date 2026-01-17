@@ -1,0 +1,21 @@
+# Ignore simulation logs and build files
+*.log
+*.backup.log
+*.jou
+*.pb
+*.vcd
+*.wdb
+*.svf
+*.xpr
+*.xsim*
+xsim.dir/
+log/
+script/
+rep/
+*.zip
+*.tar
+*.gz
+*.exe
+*.DS_Store
+GEMINI.md
+*.bak
