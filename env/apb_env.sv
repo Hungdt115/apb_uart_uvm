@@ -19,7 +19,7 @@ class apb_env extends uvm_env;
   //Build phase - Construct agent and get virtual interface handle from test  and pass it down to agent
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    agt = apb_agent::type_id::create("agt", this);
+    //agt = apb_agent::type_id::create("agt", this);
     mst_agt = apb_master_agent::type_id::create("mst_agt", this);
     scb = apb_scoreboard::type_id::create("scb", this);
     apb_subscriber_h = apb_subscriber::type_id::create("apn_subscriber_h", this);

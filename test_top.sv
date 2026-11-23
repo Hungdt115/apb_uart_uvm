@@ -32,6 +32,7 @@
 //--------------------------------------------------------------------
 `include "apb_base_test.sv"
 `include "apb_directed_test.sv"
+`include "apb_simple_test.sv"
 
 
 

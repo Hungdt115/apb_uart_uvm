@@ -67,12 +67,12 @@ echo "--------------------------------------------------"
 echo "----              Simulation start            ----"
 echo "--------------------------------------------------"
 
-xsim $TB_TOP -R --log "$PROJECT_ROOT/log/xsim_$DUT_TOP.log" --testplusarg "UVM_TESTNAME=$TESTNAME"
+xsim $TB_TOP -R --log "$PROJECT_ROOT/log/xsim_$TESTNAME.log" --testplusarg "UVM_TESTNAME=$TESTNAME"
 
 if ($status != 0) then
   echo ""
   echo "##### Simulation error   #####"
-  echo "Check log: $PROJECT_ROOT/log/xsim_$DUT_TOP.log"
+  echo "Check log: $PROJECT_ROOT/log/xsim_$TESTNAME.log"
   exit 1
 endif
 

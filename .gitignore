@@ -1,21 +1,56 @@
-# Ignore simulation logs and build files
+# ===== XSIM / Vivado simulation outputs =====
+sim/xsim.dir/
+sim/xsim.codeCov/
+sim/xsim.covdb/
+sim/xsim.log
+sim/xsim*.log
+sim/*.jou
+sim/*.pb
+sim/*.wdb
+sim/*.wcfg
+sim/webtalk*.jou
+sim/webtalk*.log
+sim/.Xil/
+sim/xvlog.log
+sim/xelab.log
+sim/xsimK.log
+sim/*.backup.log
+sim/*.str
+sim/*.vcd
+sim/*.fsdb
+sim/*.shm
+
+# ===== Thư viện compile (nếu có) =====
+sim/work/
+sim/xsim.dir/
+*.sdb
+*.o
+*.so
+*.dll
+*.a
+*.lib
+
+# ===== Coverage =====
+*.ucdb
+*.cov
+*.covdb
+*.CCInfo
+*.covinfo
+coverage/
+
+# ===== Log / report chung =====
 *.log
-*.backup.log
-*.jou
-*.pb
-*.vcd
-*.wdb
-*.svf
-*.xpr
-*.xsim*
-xsim.dir/
-log/
-script/
-rep/
-*.zip
-*.tar
-*.gz
-*.exe
-*.DS_Store
-GEMINI.md
+*.rpt
+*.summary
+
+# ===== File tạm của editor =====
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
 *.bak
+
+# ===== OS =====
+.DS_Store
+Thumbs.db

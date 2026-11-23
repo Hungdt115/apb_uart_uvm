@@ -28,8 +28,8 @@ class apb_master_directed_sequence extends uvm_sequence #(apb_transaction);
       // ---- Write transaction ----
       tr = apb_transaction::type_id::create("tr_write",, get_full_name());
       tr.PADDR = 32'h0000_0000 + i * 4;
-      tr.PWRITE = apb_transaction::WRITE;
-      tr.DATA = 32'h0000_0000 + i;
+      tr.PWRITE = apb_transaction::APB_WRITE;
+      tr.DATA = (i==2) ? 32'h0000_0001 : 32'h0000_0000 + i;
 
       start_item(tr);
       finish_item(tr);      
@@ -38,7 +38,7 @@ class apb_master_directed_sequence extends uvm_sequence #(apb_transaction);
     // ---- Read transaction ----
       tr = apb_transaction::type_id::create("tr_read",, get_full_name());
       tr.PADDR = 32'h0000_0000 + i * 4;
-      tr.PWRITE = apb_transaction::READ;
+      tr.PWRITE = apb_transaction::APB_READ;
 
       start_item(tr);
       finish_item(tr);

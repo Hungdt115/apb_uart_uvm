@@ -29,6 +29,12 @@ module top_test();
     forever #5 slave_vif.PCLK = ~slave_vif.PCLK;
   end
 
+  logic UART_CLK;
+  initial begin
+    UART_CLK = 1'b0;
+    forever #10 UART_CLK = ~UART_CLK;
+  end
+
   assign master_vif.PCLK = slave_vif.PCLK;
 
   //--------------------------------------------------------------------
@@ -74,7 +80,7 @@ module top_test();
     .M_PSLVERR (master_vif.PSLVERR),
     
     //Uart interface
-    .UART_CLK  (slave_vif.PCLK),
+    .UART_CLK  (UART_CLK),
     .RST_N     (slave_vif.PRESETN)
   );
 

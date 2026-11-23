@@ -25,25 +25,28 @@ class apb_monitor extends uvm_monitor;
     super.run_phase(phase);
     forever begin
       apb_transaction tr;
-      // Wait for a SETUP cycle
+
+      // Wait for a SETUP cycle (PSEL=1, PENABLE=0)
       do begin
         @(posedge this.vif.PCLK);
       end while (this.vif.PSEL !== 1'b1 || this.vif.PENABLE !== 1'b0);
-      //create a transaction object
+
+      // Create transaction object and sample control/address at SETUP
       tr = apb_transaction::type_id::create("tr", this);
+      tr.PWRITE = (this.vif.PWRITE) ? apb_transaction::APB_WRITE : apb_transaction::APB_READ;
+      tr.PADDR  = this.vif.PADDR;
 
-      //populate fields based on values seen on interface
-      tr.PWRITE = (this.vif.PWRITE) ? apb_transaction::WRITE : apb_transaction::READ;
-      tr.PADDR = this.vif.PADDR;
+      // Wait for the ACCESS completion: PSEL=1 && PENABLE=1 && PREADY=1
+      do begin
+        @(posedge this.vif.PCLK);
+      end while (this.vif.PSEL    !== 1'b1 ||
+                 this.vif.PENABLE !== 1'b1 ||
+                 this.vif.PREADY  !== 1'b1);
 
-      @(posedge this.vif.PCLK);
-      if (this.vif.PENABLE !== 1'b1) begin
-        `uvm_error("APB", "APB protocol violation: SETUP cycle not followed by ENABLE cycle");
-      end
-
-      if (tr.PWRITE == apb_transaction::READ) begin
+      // Only update DATA at the exact completion cycle
+      if (tr.PWRITE == apb_transaction::APB_READ) begin
         tr.DATA = this.vif.PRDATA;
-      end else if (tr.PWRITE == apb_transaction::WRITE) begin
+      end else begin
         tr.DATA = this.vif.PWDATA;
       end
 

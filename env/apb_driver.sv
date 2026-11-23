@@ -20,6 +20,7 @@ class apb_driver extends uvm_driver #(apb_transaction);
 
     this.vif.PSEL    <= 0;
     this.vif.PENABLE <= 0;
+    this.vif.PSTRB   <= 4'h0;
 
     forever begin
       apb_transaction tr;
@@ -30,8 +31,8 @@ class apb_driver extends uvm_driver #(apb_transaction);
       uvm_report_info("APB_DRIVER ", $sformatf("Got Transaction %s", tr.convert2string()));
       //Decode the APB Command and call either the read/write function
       case (tr.PWRITE)
-        apb_transaction::READ:  drive_read(tr.PADDR, tr.DATA);
-        apb_transaction::WRITE: drive_write(tr.PADDR, tr.DATA);
+        apb_transaction::APB_READ:  drive_read(tr.PADDR, tr.DATA);
+        apb_transaction::APB_WRITE: drive_write(tr.PADDR, tr.DATA);
       endcase
       //Handshake DONE back to sequencer
       seq_item_port.item_done();
@@ -41,10 +42,12 @@ class apb_driver extends uvm_driver #(apb_transaction);
   virtual protected task drive_read(input bit [31:0] addr, output logic [31:0] data);
     this.vif.PADDR  <= addr;
     this.vif.PWRITE <= 0;
+    this.vif.PSTRB  <= 4'h0;
     this.vif.PSEL   <= 1;
     @(posedge this.vif.PCLK);
     this.vif.PENABLE <= 1;
-    @(posedge this.vif.PCLK);
+    // Wait until the slave asserts PREADY, then sample PRDATA
+    do @(posedge this.vif.PCLK); while (this.vif.PREADY !== 1'b1);
     data = this.vif.PRDATA;
     this.vif.PSEL    <= 0;
     this.vif.PENABLE <= 0;
@@ -54,10 +57,12 @@ class apb_driver extends uvm_driver #(apb_transaction);
     this.vif.PADDR  <= addr;
     this.vif.PWDATA <= data;
     this.vif.PWRITE <= 1;
+    this.vif.PSTRB  <= 4'hF; // full-word write
     this.vif.PSEL   <= 1;
     @(posedge this.vif.PCLK);
     this.vif.PENABLE <= 1;
-    @(posedge this.vif.PCLK);
+    // Wait until the slave asserts PREADY before ending the transfer
+    do @(posedge this.vif.PCLK); while (this.vif.PREADY !== 1'b1);
     this.vif.PSEL    <= 0;
     this.vif.PENABLE <= 0;
   endtask

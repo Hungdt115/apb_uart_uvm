@@ -6,7 +6,8 @@ class apb_scoreboard extends uvm_scoreboard;
 
   apb_transaction exp_queue[$];
 
-  bit [31:0] sc_mem[0:256];
+  // Associative array indexed by 32-bit APB address
+  bit [31:0] sc_mem[bit [31:0]];
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -15,40 +16,32 @@ class apb_scoreboard extends uvm_scoreboard;
 
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
-    foreach (sc_mem[i]) sc_mem[i] = i;
+    sc_mem.delete();
   endfunction
 
-  // write task - recives the pkt from monitor and pushes into queue
+  // write task - receives the pkt from monitor and pushes into queue
   function void write(apb_transaction tr);
-    //tr.print();
+    // tr.print();
     exp_queue.push_back(tr);
   endfunction
 
   virtual task run_phase(uvm_phase phase);
-    //super.run_phase(phase);
     apb_transaction expdata;
 
     forever begin
       wait (exp_queue.size() > 0);
       expdata = exp_queue.pop_front();
 
-      if (expdata.PWRITE == apb_transaction::WRITE) begin
-        sc_mem[expdata.PADDR] = expdata.DATA;
-        `uvm_info("APB_SCOREBOARD", $sformatf("------ :: WRITE DATA :: ------"), UVM_LOW)
-        `uvm_info("", $sformatf("Addr: 0x%8h", expdata.PADDR), UVM_LOW)
-        `uvm_info("", $sformatf("Data: 0x%8h\n", expdata.DATA), UVM_LOW)
-      end else if (expdata.PWRITE == apb_transaction::READ) begin
-        if (sc_mem[expdata.PADDR] == expdata.DATA) begin
-          `uvm_info("APB_SCOREBOARD", $sformatf("------ :: READ DATA Match :: ------"), UVM_LOW)
-          `uvm_info("", $sformatf("Addr: 0x%8h", expdata.PADDR), UVM_LOW)
-          `uvm_info("", $sformatf("Expected Data: 0x%8h Actual Data: 0x%8h\n",
-                                  sc_mem[expdata.PADDR], expdata.DATA), UVM_LOW)
+      if (expdata.PWRITE == apb_transaction::APB_WRITE) begin
+        sc_mem[expdata.PADDR]    = expdata.DATA;
+        `uvm_info("APB_SCOREBOARD", $sformatf("WRITE  Addr=0x%08h  Data=0x%08h", expdata.PADDR, expdata.DATA), UVM_LOW)
+      end else if (expdata.PWRITE == apb_transaction::APB_READ) begin
+        if (!sc_mem.exists(expdata.PADDR)) begin
+          `uvm_info("APB_SCOREBOARD", $sformatf("READ_UNWRITTEN  Addr=0x%08h  Data=0x%08h", expdata.PADDR, expdata.DATA), UVM_LOW)
+        end else if (sc_mem[expdata.PADDR] == expdata.DATA) begin
+          `uvm_info("APB_SCOREBOARD", $sformatf("READ_MATCH  Addr=0x%08h  Exp=0x%08h  Got=0x%08h", expdata.PADDR, sc_mem[expdata.PADDR], expdata.DATA), UVM_LOW)
         end else begin
-          `uvm_error("APB_SCOREBOARD", "------ :: READ DATA MisMatch :: ------")
-          `uvm_info("", $sformatf("Addr: 0x%8h", expdata.PADDR), UVM_LOW)
-          `uvm_info("", $sformatf(
-                    "Expected Data: 0x%8h Actual Data: 0x%8h\n", sc_mem[expdata.PADDR], expdata.DATA
-                    ), UVM_LOW)
+          `uvm_error("APB_SCOREBOARD", $sformatf("READ_MISMATCH  Addr=0x%08h  Exp=0x%08h  Got=0x%08h", expdata.PADDR, sc_mem[expdata.PADDR], expdata.DATA))
         end
       end
     end

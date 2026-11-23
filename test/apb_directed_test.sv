@@ -38,7 +38,7 @@ class apb_directed_test extends apb_base_test;
     apb_master_directed_sequence seq;
     seq = apb_master_directed_sequence::type_id::create("seq");
     phase.raise_objection(this, "Starting apb_directed_test main phase");
-
+    #50;
     $display("%t Starting sequence apb_directed_test run_phase", $time);
     seq.start(env.mst_agt.sqr);
     #50ns;

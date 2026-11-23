@@ -1,6 +1,9 @@
 ../src/apb_dut.sv
 ../src/apb_dut_wrapper.sv
-../src/apb_mem.sv
 ../src/apb_slave.v
+../src/uart_tx.sv
+../src/uart_rx.sv
+../src/sync_fifo.v
+../src/uart_baud_gen.v
 ../src/apb2reg.v
 ../src/rw_reg.v

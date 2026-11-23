@@ -67,5 +67,38 @@ class apb_base_test extends uvm_test;
   endfunction
 
 
+  //------------------------------------------------------------------
+  //-- Single APB access helpers (for test scenarios):
+  //--   drive one write / read transaction directly on the interface
+  //--   using the same protocol as apb_driver (PREADY-aware).
+  //------------------------------------------------------------------
+  virtual task apb_single_write(input bit [31:0] addr, input bit [31:0] data);
+    this.vif.PADDR  <= addr;
+    this.vif.PWDATA <= data;
+    this.vif.PWRITE <= 1;
+    this.vif.PSTRB  <= 4'hF;   // full-word write
+    this.vif.PSEL   <= 1;
+    @(posedge this.vif.PCLK);
+    this.vif.PENABLE <= 1;
+    // Wait until the slave asserts PREADY before ending the transfer
+    do @(posedge this.vif.PCLK); while (this.vif.PREADY !== 1'b1);
+    this.vif.PSEL    <= 0;
+    this.vif.PENABLE <= 0;
+  endtask
+
+  virtual task apb_single_read(input bit [31:0] addr, output logic [31:0] data);
+    this.vif.PADDR  <= addr;
+    this.vif.PWRITE <= 0;
+    this.vif.PSTRB  <= 4'h0;
+    this.vif.PSEL   <= 1;
+    @(posedge this.vif.PCLK);
+    this.vif.PENABLE <= 1;
+    // Wait for the ACCESS cycle where PREADY is asserted, then sample PRDATA
+    do @(posedge this.vif.PCLK); while (this.vif.PREADY !== 1'b1);
+    data = this.vif.PRDATA;
+    this.vif.PSEL    <= 0;
+    this.vif.PENABLE <= 0;
+  endtask
+
 endclass
 
