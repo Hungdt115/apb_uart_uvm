@@ -32,6 +32,8 @@ PREADY    ______________________/‾‾‾‾‾\______
           |  IDLE  |  SETUP  |  ACCESS  |
 ```
 
+> PREADY is a **held level**: it stays high after the ACCESS phase (through idle and the next SETUP) and only re-arms when the next transfer's SETUP begins — the simplified chart above shows only the rise inside the ACCESS phase.
+
 ## 4. Parameters
 
 | Parameter | Default | Description |
@@ -74,7 +76,7 @@ PREADY    ______________________/‾‾‾‾‾\______
 
 | Signal | Dir | Width | Clock | Active | Description |
 |---|---|---|---|---|---|
-| O_PREADY | OUT | — | APB | — | APB ready; high when the access phase completes. |
+| O_PREADY | OUT | — | APB | — | APB ready. Held high from the ready point until the next transfer's SETUP begins (level, not a pulse). |
 | O_PRDATA | OUT | [31:0] | APB | — | APB read data. |
 | O_PSLVERR | OUT | — | APB | — | APB slave error, held until the access completes. |
 
@@ -149,8 +151,9 @@ The module **does not use an FSM/state register**. All behavior is described by 
 
 **Access completion (`w_pdone = 1`):**
 
-- Mode 0: `O_PREADY = access_d & wait_done`.
-- Mode 1: `O_PREADY = access_d & I_REG_ACK`.
+- Mode 0: `O_PREADY` rises when the wait counter reaches the target and is **held at 1** afterwards (level, not a pulse).
+- Mode 1: `O_PREADY` rises one cycle after `I_REG_ACK` (registered) and is **held at 1** afterwards.
+- In both modes `O_PREADY` stays asserted through the completion and the following idle/setup cycles, and re-arms (drops) only when the next transfer's SETUP begins — matching the ARM APB FSM style.
 - `O_REG_ERR_ACK` issues a 1-cycle pulse (see 6.4).
 - `O_PRDATA` is not updated (held — write).
 - `O_PSLVERR` follows `err_d` (see 6.4).
@@ -176,8 +179,9 @@ The module **does not use an FSM/state register**. All behavior is described by 
 
 **Access completion (`w_pdone = 1`):**
 
-- Mode 0: `O_PREADY = access_d & wait_done`.
-- Mode 1: `O_PREADY = access_d & I_REG_ACK`.
+- Mode 0: `O_PREADY` rises when the wait counter reaches the target and is **held at 1** afterwards (level, not a pulse).
+- Mode 1: `O_PREADY` rises one cycle after `I_REG_ACK` (registered) and is **held at 1** afterwards.
+- In both modes `O_PREADY` stays asserted through the completion and the following idle/setup cycles, and re-arms (drops) only when the next transfer's SETUP begins — matching the ARM APB FSM style.
 - `O_PRDATA` ← `I_REG_RD_DATA` latched at `w_pdone`.
 - `O_REG_ERR_ACK` issues a 1-cycle pulse (see 6.4).
 - `O_PSLVERR` follows `err_d` (see 6.4).
@@ -210,7 +214,7 @@ The module **does not use an FSM/state register**. All behavior is described by 
 
 | Output | `p_use_ack = 0` | `p_use_ack = 1` |
 |---|---|---|
-| `O_PREADY` | `access_d & wait_done` | `access_d & I_REG_ACK` |
+| `O_PREADY` | Rises at wait-done, **held at 1** until the next SETUP | Rises 1 cycle after ACK, **held at 1** until the next SETUP |
 | `O_REG_ADDR` | Latched at `w_psel` | Latched at `w_psel` |
 | `O_REG_WR_DATA` | Latched at `w_psel`, byte-filtered by `I_PSTRB` | Latched at `w_psel`, byte-filtered by `I_PSTRB` |
 | `O_REG_WR` | 1-cycle pulse at `w_penable_pos & PWRITE` (writes only) | Level 1 held until the transaction completes (writes only) |
