@@ -147,28 +147,23 @@ module apb_slave #(
   end
 
   // ================= PREADY HOLD (p_use_ack=0) =================
-  // Held level: set once the wait counter reaches its target and
-  // kept asserted until the next transfer's SETUP re-arms it.
   reg          r_pready;
   always @(posedge I_PCLK or negedge I_PRESET) begin
     if (!I_PRESET)
       r_pready <= 1'b0;
-    else if (w_psel)
-      r_pready <= 1'b0;                           // new transfer: re-arm
     else if (w_penable)
-      r_pready <= r_pready | w_wait_done;         // set once ready, then hold
+      r_pready <= 1'b0;    // new transfer: re-arm
+    else if (w_wait_done)
+      r_pready <= 1'b1;    // set once ready, then hold
   end
   
   // ================= ACK READY (p_use_ack=1) =================
-  // Registered ACK: O_PREADY rises one cycle after I_REG_ACK so the
-  // latched O_PRDATA is stable at the master's sample edge. Once set
-  // it is held until the next transfer's SETUP (level, not a pulse).
   reg          r_ack_ready;
   always @(posedge I_PCLK or negedge I_PRESET) begin
     if (!I_PRESET)
       r_ack_ready <= 1'b0;
     else if (w_psel)
-      r_ack_ready <= 1'b0;                        // new transfer: wait for ACK
+      r_ack_ready <= 1'b0; // new transfer: wait for ACK
     else if (I_REG_ACK)
       r_ack_ready <= 1'b1;
   end
@@ -193,26 +188,13 @@ module apb_slave #(
       r_slv_err <= 1'b1;
   end
 
-  // ================= PREADY =================
-  wire w_access_done = (p_use_ack) ? (w_penable & r_ack_ready)
-                                   : (w_penable & w_wait_done);
-  reg  r_slv_ready;
-  always @(posedge I_PCLK or negedge I_PRESET) begin
-    if (!I_PRESET)
-      r_slv_ready <= 1'b0;
-    else if (w_access_done)
-      r_slv_ready <= 1'b1;
-  end                                  
-                                   
   // ================= OUTPUTS =================
   assign O_REG_ADDR    = r_reg_addr;
   assign O_REG_WR_DATA = r_reg_wr_data;
   assign O_REG_WR      = (p_use_ack) ? r_wr_req : w_wr_pulse;
   assign O_REG_RD      = (p_use_ack) ? r_rd_req : w_rd_pulse;
   assign O_PRDATA      = r_reg_rd_data;
-  assign O_PREADY      = (p_use_ack) ? r_ack_ready
-                                     : (w_penable ? (r_pready | w_wait_done)
-                                                  : r_pready);
+  assign O_PREADY      = (p_use_ack) ? r_ack_ready : r_pready;
   assign O_PSLVERR     = r_slv_err;
   assign O_REG_ERR_ACK = w_pdone;
 
