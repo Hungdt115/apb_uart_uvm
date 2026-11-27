@@ -17,10 +17,6 @@ module apb2reg (
     output        O_REG_ERR,
 
     // UART interface
-    //  TX: REG_UART_TXD carries the byte landed in the UART domain;
-    //      REG_UART_TX_WEN is the 1-cycle UART pulse to push it into the TX FIFO.
-    //  RX: REG_UART_RXD is the RX FIFO head presented continuously by uart_rx
-    //      (peek); REG_UART_RX_REN is the 1-cycle UART pulse that pops the head.
     output [7:0] REG_UART_TXD,
     input  [7:0] REG_UART_RXD,
     output       REG_UART_TX_WEN,
@@ -32,6 +28,7 @@ module apb2reg (
     output [31:0] REG_UART_MODE,
     output [15:0] REG_UART_BRG,
     output        REG_UART_BRG_WEN,
+    output [2:0]  REG_UART_DBITS,
     output [31:0] REG_UART_IE,
     output [31:0] REG_UART_IFCLR,
 
@@ -46,6 +43,7 @@ module apb2reg (
     localparam [29:0] p_reg_uart_sta     = 30'(32'h0000_0008 >> 2);
     localparam [29:0] p_reg_uart_mode    = 30'(32'h0000_000c >> 2);
     localparam [29:0] p_reg_uart_brg     = 30'(32'h0000_0010 >> 2);
+    localparam [29:0] p_reg_uart_dbits   = 30'(32'h0000_0020 >> 2);
     localparam [29:0] p_reg_uart_ie      = 30'(32'h0000_0014 >> 2);
     localparam [29:0] p_reg_uart_if      = 30'(32'h0000_0018 >> 2);
     localparam [29:0] p_reg_uart_ifclr   = 30'(32'h0000_001c >> 2);
@@ -53,10 +51,11 @@ module apb2reg (
     localparam [29:0] p_reg_uart_rxd     = 30'(32'h0000_0200 >> 2);
     
     // Initial value
-    localparam [31:0] p_reg_uart_en_ini    = 32'h0000_0000;
+    localparam [31:0] p_reg_uart_en_ini    = 32'h0000_0001;
     localparam [31:0] p_reg_uart_csr_ini   = 32'h0000_0000;
     localparam [31:0] p_reg_uart_mode_ini  = 32'h0000_0000;
-    localparam [31:0] p_reg_uart_brg_ini   = 32'h0000_0000;
+    localparam [31:0] p_reg_uart_brg_ini   = 32'h0000_0146;   // 326 = 9600 bps @ 50 MHz
+    localparam [31:0] p_reg_uart_dbits_ini = 32'h0000_0000;
     localparam [31:0] p_reg_uart_ie_ini    = 32'h0000_0000;
     localparam [31:0] p_reg_uart_ifclr_ini = 32'h0000_0000;
     localparam [ 7:0] p_reg_uart_txd_ini   = 8'h00;
@@ -76,6 +75,7 @@ module apb2reg (
     wire [31:0] apb_reg_uart_sta;
     wire [31:0] apb_reg_uart_mode;
     wire [31:0] apb_reg_uart_brg;
+    wire [31:0] apb_reg_uart_dbits;
     wire [31:0] apb_reg_uart_ie;
     wire [31:0] apb_reg_uart_if;
     wire [31:0] apb_reg_uart_ifclr;
@@ -86,6 +86,7 @@ module apb2reg (
     wire        uart_csr_ack;
     wire        uart_mode_ack;
     wire        uart_brg_ack;
+    wire        uart_dbits_ack;
     wire        uart_ie_ack;
     wire        uart_ifclr_ack;
     wire        uart_txd_ack;
@@ -94,6 +95,7 @@ module apb2reg (
     reg  [31:0] r_reg_uart_csr;
     reg  [31:0] r_reg_uart_mode;
     reg  [31:0] r_reg_uart_brg;
+    reg  [31:0] r_reg_uart_dbits;
     reg  [31:0] r_reg_uart_ie;
     reg  [31:0] r_reg_uart_ifclr;
     reg  [ 7:0] r_reg_uart_txd;
@@ -101,11 +103,12 @@ module apb2reg (
     // ------------------------------------------------------------
     // Write mask by address
     // ------------------------------------------------------------
-    assign mask_wr_data =   (I_REG_ADDR[31:2] == p_reg_uart_en   ) ? 32'h0000_0002 : // bit1 = EN
+    assign mask_wr_data =   (I_REG_ADDR[31:2] == p_reg_uart_en   ) ? 32'h0000_0001 : // bit0
                             (I_REG_ADDR[31:2] == p_reg_uart_csr  ) ? 32'h0000_00FF : // bit0-7
                             (I_REG_ADDR[31:2] == p_reg_uart_sta  ) ? 32'h0000_0000 : // RO (uart_top)
                             (I_REG_ADDR[31:2] == p_reg_uart_mode ) ? 32'h0000_000F : // bit0-3
                             (I_REG_ADDR[31:2] == p_reg_uart_brg  ) ? 32'h0000_FFFF : // bit0-15
+                            (I_REG_ADDR[31:2] == p_reg_uart_dbits) ? 32'h0000_0007 : // bit0-2: data-bits select
                             (I_REG_ADDR[31:2] == p_reg_uart_ie   ) ? 32'h0000_00FF : // bit0-7
                             (I_REG_ADDR[31:2] == p_reg_uart_if   ) ? 32'h0000_0000 : // RO (uart_top)
                             (I_REG_ADDR[31:2] == p_reg_uart_ifclr) ? 32'h0000_00FF : // bit0-7
@@ -122,15 +125,13 @@ module apb2reg (
     rw_reg #(.DW(32), .DAT_INI(p_reg_uart_csr_ini))   u_uart_csr   (.I_CLK(PCLK), .I_RST(PRESETN), .O_CLK(UART_CLK), .O_RST(RST_N), .WEN(I_REG_WR), .PADDR(I_REG_ADDR[31:2]), .WADDR(p_reg_uart_csr  ), .PDATA(mod_wr_data[31:0]), .O_APB_REG(apb_reg_uart_csr  ), .O_UART_REG(r_reg_uart_csr), .O_ACK(uart_csr_ack));
     rw_reg #(.DW(32), .DAT_INI(p_reg_uart_mode_ini))  u_uart_mode  (.I_CLK(PCLK), .I_RST(PRESETN), .O_CLK(UART_CLK), .O_RST(RST_N), .WEN(I_REG_WR), .PADDR(I_REG_ADDR[31:2]), .WADDR(p_reg_uart_mode ), .PDATA(mod_wr_data[31:0]), .O_APB_REG(apb_reg_uart_mode ), .O_UART_REG(r_reg_uart_mode), .O_ACK(uart_mode_ack));
     rw_reg #(.DW(32), .DAT_INI(p_reg_uart_brg_ini))   u_uart_brg   (.I_CLK(PCLK), .I_RST(PRESETN), .O_CLK(UART_CLK), .O_RST(RST_N), .WEN(I_REG_WR), .PADDR(I_REG_ADDR[31:2]), .WADDR(p_reg_uart_brg  ), .PDATA(mod_wr_data[31:0]), .O_APB_REG(apb_reg_uart_brg  ), .O_UART_REG(r_reg_uart_brg), .O_ACK(uart_brg_ack));
+    rw_reg #(.DW(32), .DAT_INI(p_reg_uart_dbits_ini)) u_uart_dbits (.I_CLK(PCLK), .I_RST(PRESETN), .O_CLK(UART_CLK), .O_RST(RST_N), .WEN(I_REG_WR), .PADDR(I_REG_ADDR[31:2]), .WADDR(p_reg_uart_dbits), .PDATA(mod_wr_data[31:0]), .O_APB_REG(apb_reg_uart_dbits), .O_UART_REG(r_reg_uart_dbits), .O_ACK(uart_dbits_ack));
     rw_reg #(.DW(32), .DAT_INI(p_reg_uart_ie_ini))    u_uart_ie    (.I_CLK(PCLK), .I_RST(PRESETN), .O_CLK(UART_CLK), .O_RST(RST_N), .WEN(I_REG_WR), .PADDR(I_REG_ADDR[31:2]), .WADDR(p_reg_uart_ie   ), .PDATA(mod_wr_data[31:0]), .O_APB_REG(apb_reg_uart_ie   ), .O_UART_REG(r_reg_uart_ie), .O_ACK(uart_ie_ack));
     rw_reg #(.DW(32), .DAT_INI(p_reg_uart_ifclr_ini)) u_uart_ifclr (.I_CLK(PCLK), .I_RST(PRESETN), .O_CLK(UART_CLK), .O_RST(RST_N), .WEN(I_REG_WR), .PADDR(I_REG_ADDR[31:2]), .WADDR(p_reg_uart_ifclr), .PDATA(mod_wr_data[31:0]), .O_APB_REG(apb_reg_uart_ifclr), .O_UART_REG(r_reg_uart_ifclr), .O_ACK(uart_ifclr_ack));
     rw_reg #(.DW(8 ), .DAT_INI(p_reg_uart_txd_ini))   u_uart_txd   (.I_CLK(PCLK), .I_RST(PRESETN), .O_CLK(UART_CLK), .O_RST(RST_N), .WEN(I_REG_WR), .PADDR(I_REG_ADDR[31:2]), .WADDR(p_reg_uart_txd  ), .PDATA(mod_wr_data[ 7:0]), .O_APB_REG( /*Read only*/    ), .O_UART_REG(r_reg_uart_txd[7:0]), .O_ACK(uart_txd_ack));
 
     // ------------------------------------------------------------
-    // RX FIFO read crossing (APB -> UART):
-    //   PCLK: rising edge of the RXD read request -> toggle
-    //   UART: 2-FF sync -> edge detect -> 1-cycle REG_UART_RX_REN pulse
-    // The toggle guarantees the pulse is not lost when UART_CLK < PCLK.
+    // RX FIFO read crossing (APB -> UART)
     // ------------------------------------------------------------
     wire w_rx_rd_req    = I_REG_RD & (I_REG_ADDR[31:2] == p_reg_uart_rxd);
     reg  r_rx_rd_req_d;
@@ -167,18 +168,12 @@ module apb2reg (
     assign REG_UART_RX_REN = r_rx_rd_sync2 ^ r_rx_rd_sync3;
 
     // ------------------------------------------------------------
-    // RX data return (uart_top -> APB): the RX FIFO head is a
-    // registered (shadow) output of uart_top, connected directly to
-    // the read mux — no 2-FF synchroniser. The read is acknowledged
-    // immediately on request (O_REG_ACK rises with I_REG_RD).
+    // RX data return (uart_top -> APB)
     // ------------------------------------------------------------
     assign apb_reg_uart_rxd = {24'h000000, REG_UART_RXD};
 
     // ------------------------------------------------------------
-    // STA / IF status return (uart_top -> APB): the read-only status
-    // values are registered (shadow) outputs of uart_top, connected
-    // directly to the read mux — no 2-FF synchroniser. Reads are
-    // acknowledged immediately on request.
+    // STA / IF status return (uart_top -> APB
     // ------------------------------------------------------------
     assign apb_reg_uart_sta = REG_UART_STA;
     assign apb_reg_uart_if  = REG_UART_IF;
@@ -201,6 +196,7 @@ module apb2reg (
                           (I_REG_ADDR[31:2] == p_reg_uart_sta  ) ? apb_reg_uart_sta  :
                           (I_REG_ADDR[31:2] == p_reg_uart_mode ) ? apb_reg_uart_mode :
                           (I_REG_ADDR[31:2] == p_reg_uart_brg  ) ? apb_reg_uart_brg  :
+                          (I_REG_ADDR[31:2] == p_reg_uart_dbits) ? apb_reg_uart_dbits:
                           (I_REG_ADDR[31:2] == p_reg_uart_ie   ) ? apb_reg_uart_ie   :
                           (I_REG_ADDR[31:2] == p_reg_uart_if   ) ? apb_reg_uart_if   :
                           (I_REG_ADDR[31:2] == p_reg_uart_ifclr) ? apb_reg_uart_ifclr:
@@ -209,12 +205,8 @@ module apb2reg (
     // ------------------------------------------------------------
     // APB handshake
     // ------------------------------------------------------------
-    // Write ACK: aggregate the UART-domain landing pulses -> toggle
-    // (UART_CLK) -> 2-FF sync -> edge detect -> 1-cycle PCLK pulse.
-    // O_REG_ACK = read (immediate) | write (value landed in UART domain).
-    // ------------------------------------------------------------
     wire w_uart_wr_ack = uart_en_ack    | uart_csr_ack  | uart_mode_ack |
-                         uart_brg_ack   | uart_ie_ack   | uart_ifclr_ack |
+                         uart_brg_ack   | uart_dbits_ack | uart_ie_ack  | uart_ifclr_ack |
                          uart_txd_ack;
 
     reg r_wr_ack_toggle;
@@ -252,6 +244,7 @@ module apb2reg (
                     (I_REG_ADDR[31:2] == p_reg_uart_sta  ) |
                     (I_REG_ADDR[31:2] == p_reg_uart_mode ) |
                     (I_REG_ADDR[31:2] == p_reg_uart_brg  ) |
+                    (I_REG_ADDR[31:2] == p_reg_uart_dbits) |
                     (I_REG_ADDR[31:2] == p_reg_uart_ie   ) |
                     (I_REG_ADDR[31:2] == p_reg_uart_if   ) |
                     (I_REG_ADDR[31:2] == p_reg_uart_ifclr) |
@@ -266,7 +259,7 @@ module apb2reg (
     // ------------------------------------------------------------
     // Output register
     // ------------------------------------------------------------
-    assign REG_UART_EN     = r_reg_uart_en[1];
+    assign REG_UART_EN     = r_reg_uart_en[0];
     assign REG_UART_TXD    = r_reg_uart_txd;
 
     // W1S clear pulse generation in UART_CLK domain (1-cycle UART_CLK pulse)
@@ -286,7 +279,8 @@ module apb2reg (
     assign REG_UART_CSR[31:8] = 24'h000000;            // bits 31:8: Reserved (ro: 0)
 
     assign REG_UART_MODE   = r_reg_uart_mode;
-    assign REG_UART_BRG    = r_reg_uart_brg[15:0];    
+    assign REG_UART_BRG    = r_reg_uart_brg[15:0];
+    assign REG_UART_DBITS  = r_reg_uart_dbits[2:0];
     assign REG_UART_IE     = r_reg_uart_ie;
     assign REG_UART_IFCLR  = r_reg_uart_ifclr;
     assign REG_UART_TX_WEN = uart_txd_ack;

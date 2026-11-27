@@ -109,6 +109,7 @@ module apb_dut (
     logic [31:0]  reg_uart_sta;      // assembled internally (tx/rx status)
     logic [31:0]  reg_uart_mode;
     logic [15:0]  reg_uart_brg;      // brg_div
+    logic [2:0]   reg_uart_dbits;    // data-bits select (wired into uart_tx/uart_rx later)
     logic [31:0]  reg_uart_ie;
     logic [31:0]  reg_uart_if;       // interrupt flags (extend with RX/IE/IF logic as needed)
     logic [31:0]  reg_uart_ifclr;
@@ -138,6 +139,7 @@ module apb_dut (
         .REG_UART_MODE   (reg_uart_mode),
         .REG_UART_BRG    (reg_uart_brg),   // [15:0]
         .REG_UART_BRG_WEN(reg_uart_brg_wen),
+        .REG_UART_DBITS (reg_uart_dbits),
         .REG_UART_IE     (reg_uart_ie),
         .REG_UART_IF      (reg_uart_if),    // input of apb2reg (RO)
         .REG_UART_IFCLR  (reg_uart_ifclr),

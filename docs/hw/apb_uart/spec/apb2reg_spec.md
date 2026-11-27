@@ -6,14 +6,14 @@ status: draft
 updated: 2026-11-23
 base: 0x0000_0000
 rtl: ../../../src/apb2reg.v
-summary: Decodes the APB register word address into ten UART registers. RW registers are rw_reg slices with per-register write masks; the status (STA) and interrupt-flag (IF) registers are read-only values driven directly by uart_top and synchronised 2-FF into the APB domain.
+summary: Decodes the APB register word address into eleven UART registers. RW registers are rw_reg slices with per-register write masks; the status (STA) and interrupt-flag (IF) registers are read-only values driven directly by uart_top and synchronised 2-FF into the APB domain.
 ---
 
 > **Bản biên tập nội dung** — file `.html` cùng tên là trang hiển thị chính thức (mở trực tiếp bằng trình duyệt). Sửa nội dung ở đây rồi cập nhật sang `.html`, hoặc sửa trực tiếp `.html`.
 
 ## 1. Overview
 
-`apb2reg` decodes the APB word address into one of ten UART registers. Writes are masked per register (write mask in the register map below), so reserved bits can never be written. An access to an unmapped address — or a write to a read-only register — raises `O_REG_ERR`, which `apb_slave` reports on `PSLVERR`.
+`apb2reg` decodes the APB word address into one of eleven UART registers. Writes are masked per register (write mask in the register map below), so reserved bits can never be written. An access to an unmapped address — or a write to a read-only register — raises `O_REG_ERR`, which `apb_slave` reports on `PSLVERR`.
 
 - **RW registers** (`UART_EN`, `UART_CSR`, `UART_MODE`, `UART_BRG`, `UART_IE`, `UART_IFCLR`, `UART_TXD`) are `rw_reg` slices: an APB shadow copy plus the CDC transfer into the UART clock domain.
 - **RO registers** (`UART_STA`, `UART_IF`) are **not** register slices — their values are **registered outputs of `uart_top`** (shadow registers) connected **directly** to the APB read mux; no 2-FF synchroniser is used, so reads are answered immediately on request.
@@ -52,11 +52,12 @@ summary: Decodes the APB register word address into ten UART registers. RW regis
 
 | Signal | Dir | Width | Clock | Active | Description |
 |---|---|---|---|---|---|
-| REG_UART_EN | OUT | — | UART | — | UART enable (bit 1 of UART_EN). |
+| REG_UART_EN | OUT | — | UART | — | UART enable (bit 0 of UART_EN). |
 | REG_UART_CSR | OUT | [31:0] | UART | — | Control & Status register value. |
 | REG_UART_MODE | OUT | [31:0] | UART | — | Mode register value. |
 | REG_UART_BRG | OUT | [15:0] | UART | — | Baud-rate divisor (BRG_DIV) for uart_baud_gen. |
 | REG_UART_BRG_WEN | OUT | — | UART | HIGH | 1-cycle pulse when the divisor has landed in the UART domain. |
+| REG_UART_DBITS | OUT | [2:0] | UART | — | Data-bits count select (UART_DBITS). |
 | REG_UART_IE | OUT | [31:0] | UART | — | Interrupt Enable register. |
 | REG_UART_IFCLR | OUT | [31:0] | UART | — | Interrupt Flag Clear register. |
 | REG_UART_TXD | OUT | [7:0] | UART | — | TX byte landed in the UART domain; stable on the TX_WEN pulse. |
@@ -75,11 +76,12 @@ summary: Decodes the APB register word address into ten UART registers. RW regis
 
 | Register | Offset | Access | Reset | Description |
 |---|---|---|---|---|
-| UART_EN | 0x00 | rw | 0x0000_0000 | UART enable register. |
+| UART_EN | 0x00 | rw | 0x0000_0001 | UART enable register (enabled by default). |
 | UART_CSR | 0x04 | rw | 0x0000_0000 | Control & Status register. |
 | UART_STA | 0x08 | **ro** | 0x0000_0000 | Status register — driven by uart_top. |
 | UART_MODE | 0x0C | rw | 0x0000_0000 | UART mode configuration. |
-| UART_BRG | 0x10 | rw | 0x0000_0000 | Baud rate generator divisor. |
+| UART_BRG | 0x10 | rw | 0x0000_0146 | Baud rate generator divisor (326 = 9600 bps @ 50 MHz). |
+| UART_DBITS | 0x20 | rw | 0x0000_0000 | Data-bits count select (000 = 8 bits). |
 | UART_IE | 0x14 | rw | 0x0000_0000 | Interrupt Enable register. |
 | UART_IF | 0x18 | **ro** | 0x0000_0000 | Interrupt Flag register — driven by uart_top. |
 | UART_IFCLR | 0x1C | rw | 0x0000_0000 | Interrupt Flag Clear register. |
@@ -92,14 +94,14 @@ summary: Decodes the APB register word address into ten UART registers. RW regis
 
 | Offset | Width | Access | Reset | Write mask |
 |---|---|---|---|---|
-| 0x00 | 32 | rw | 0x0000_0000 | 0x0000_0002 |
+| 0x00 | 32 | rw | 0x0000_0001 | 0x0000_0001 |
 
-UART enable register.
+UART enable register. Reset = enabled (normal operation right after reset).
 
 | Bits | Field | Access | Reset | Description |
 |---|---|---|---|---|
-| 0 | — | rw | 0x0 | Reserved. |
-| 1 | EN | rw | 0x0 | UART enable. Also exposed directly on the `REG_UART_EN` output. |
+| 0 | EN | rw | 0x1 | UART enable. Also exposed directly on the `REG_UART_EN` output. |
+| 1 | — | rw | 0x0 | Reserved. |
 
 **EN encoding:**
 
@@ -192,13 +194,39 @@ Encoding consumed by `uart_tx` at frame load (see `uart_tx_spec.md` section 6); 
 
 | Offset | Width | Access | Reset | Write mask |
 |---|---|---|---|---|
-| 0x10 | 32 | rw | 0x0000_0000 | 0x0000_FFFF |
+| 0x10 | 32 | rw | 0x0000_0146 | 0x0000_FFFF |
 
-Baud rate generator divisor.
+Baud rate generator divisor. Reset = 326 → 9600 bps @ 50 MHz (usable without configuration).
 
 | Bits | Field | Access | Reset | Description |
 |---|---|---|---|---|
-| 15:0 | BRG | rw | 0x0 | 16-bit baud divisor (`BRG_DIV`) — exposed on `REG_UART_BRG[15:0]`; `REG_UART_BRG_WEN` pulses when the value lands in the UART domain (see uart_baud_gen_spec.md). |
+| 15:0 | BRG | rw | 0x0146 | 16-bit baud divisor (`BRG_DIV`) — exposed on `REG_UART_BRG[15:0]`; `REG_UART_BRG_WEN` pulses when the value lands in the UART domain (see uart_baud_gen_spec.md). |
+
+### UART_DBITS
+
+| Offset | Width | Access | Reset | Write mask |
+|---|---|---|---|---|
+| 0x20 | 32 | rw | 0x0000_0000 | 0x0000_0007 |
+
+Data-bits count select. Reset = 8 bits.
+
+| Bits | Field | Access | Reset | Description |
+|---|---|---|---|---|
+| 2:0 | DBITS | rw | 0x0 | Number of data bits per frame — exposed on `REG_UART_DBITS[2:0]`. |
+| 31:3 | — | ro | 0x0 | Reserved (reads as 0). |
+
+**DBITS encoding:**
+
+| DBITS[2:0] | Data bits |
+|---|---|
+| 3'b000 | 8 (default) |
+| 3'b001 | 5 |
+| 3'b010 | 6 |
+| 3'b011 | 7 |
+| 3'b100 | 9 |
+| 3'b101..111 | Reserved — treated as 8 |
+
+> `uart_tx` / `uart_rx` currently use the compile-time `DATA_BITS = 8`; wiring `REG_UART_DBITS` into their shifter widths is a follow-up step.
 
 ### UART_IE
 
@@ -298,6 +326,9 @@ uart_top ──▶ [ REG_UART_STA / REG_UART_IF / REG_UART_RXD ] ──▶ read 
 ---
 
 **Ghi chú biên tập:**
+- `UART_EN` chuyển về **bit 0** (mask `0x0000_0001`), reset **0x1** (enable sẵn sau reset). Test phải ghi `EN = 0x1` thay vì `0x2` (đã cập nhật `apb_simple_test.sv`).
+- Thêm thanh ghi **`UART_DBITS` (0x20, mask 0x7)** chọn số bit dữ liệu (5/6/7/8/9); `uart_tx`/`uart_rx` hiện vẫn dùng tham số `DATA_BITS=8` — nối runtime vào shifter là bước tiếp theo.
+- Reset để **chạy được ngay ở chế độ bình thường**: `UART_EN = 1`, `UART_BRG = 326` (9600 @ 50 MHz), `UART_MODE = 0` (8N1), `UART_DBITS = 0` (8 bit).
 - `UART_STA`/`UART_IF` đã chuyển từ rw (qua `rw_reg`) sang **ro** — giá trị do `uart_top` điều khiển trực tiếp trên 2 input mới `REG_UART_STA`/`REG_UART_IF` (UART domain). Đã bỏ 2 instance `rw_reg` (`u_uart_sta`, `u_uart_if`) và bỏ 2 ACK tương ứng khỏi tổ hợp write-ACK.
 - Đường đọc RO (STA/IF/RXD) **không dùng 2-FF sync** — nối trực tiếp từ output có register của `uart_top` vào read mux, ACK đọc trả về ngay khi có request (quyết định thiết kế theo yêu cầu). Điều này bỏ lớp bảo vệ metastability chính thức trên đường đọc; điều kiện an toàn thực tế là `uart_top` phải drive các tín hiệu này từ thanh ghi và chỉ thay đổi ở tốc độ sự kiện UART (quasi-static).
 - Ghi vào thanh ghi RO sẽ báo `O_REG_ERR` (mask = 0) — hành vi cố ý, khác với trước (trước đây STA/IF ghi được với mask 0x1/0x7).

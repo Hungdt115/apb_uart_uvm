@@ -50,11 +50,11 @@ class apb_simple_test extends apb_base_test;
     else
       `uvm_info (get_full_name(), $sformatf("STA idle before traffic = 0x%08h", rd), UVM_LOW)
 
-    // 4. Enable UART (EN bit1 = 1)
-    apb_single_write(32'h0000_0000, 32'h0000_0002);
+    // 4. Enable UART (EN bit0 = 1)
+    apb_single_write(32'h0000_0000, 32'h0000_0001);
     apb_single_read (32'h0000_0000, rd);
-    if (rd !== 32'h0000_0002)
-      `uvm_error(get_full_name(), $sformatf("EN readback 0x%08h exp 0x00000002", rd))
+    if (rd !== 32'h0000_0001)
+      `uvm_error(get_full_name(), $sformatf("EN readback 0x%08h exp 0x00000001", rd))
     else
       `uvm_info (get_full_name(), "UART enabled", UVM_LOW)
 
